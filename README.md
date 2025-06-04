@@ -1,10 +1,36 @@
-- 👋 Hi, I’m @arirattan
-- 👀 I’m interested in cloud and networking services, computer games and mountain bikes 
-- 🌱 I’m currently learning Microsoft azure admin and Microsoft 365 admin
-- 💞️ I’m looking to collaborate on dont feel im ready to start working with others yet as im still learning the ropes
-- 📫 How to reach me ...
+# JSON Configuration Visualizer
 
-<!---
-arirattan/arirattan is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
-You can click the Preview link to take a look at your changes.
---->
+This repository contains a simple Tkinter application for exploring Open Components System (OCS) JSON configuration files.
+
+Features include:
+
+- Load one or two JSON files for inspection
+- View each configuration section in its own tab with optional tooltips
+- Search across all fields for quick navigation
+- Diff view between two files when `jsondiff` is installed
+
+## Requirements
+
+- Python 3
+- Tkinter (usually bundled with Python)
+- [`jsondiff`](https://pypi.org/project/jsondiff/) (optional; provides diff view)
+
+Install dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+Run the visualizer with:
+
+```bash
+python json_visualizer.py
+```
+
+Use the **Upload JSON File(s)** button to load one or two configuration files. When two files are provided, a comparison tab will display the differences.
+
+## License
+
+This project is released under the MIT License.
