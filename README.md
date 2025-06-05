@@ -4,10 +4,11 @@ This repository contains a simple Tkinter application for exploring Open Compone
 
 Features include:
 
-- Load one or two JSON files for inspection
+- Load one or more JSON files for inspection
 - View each configuration section in its own tab with optional tooltips
 - Search across all fields for quick navigation
-- Diff view between two files when `jsondiff` is installed
+- Diff view between the first two files when `jsondiff` is installed
+- Heatmap comparison across all loaded files
 
 ## Requirements
 
@@ -29,7 +30,7 @@ Run the visualizer with:
 python json_visualizer.py
 ```
 
-Use the **Upload JSON File(s)** button to load one or two configuration files. When two files are provided, a comparison tab will display the differences.
+Use the **Upload JSON File(s)** button to load any number of configuration files. When multiple files are provided, a heatmap window summarizes their differences and a detailed diff between the first two files is also available.
 
 ## License
 

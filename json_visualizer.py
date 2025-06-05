@@ -9,6 +9,7 @@ created to highlight their differences.
 import json
 import os
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, ttk
 
 try:
@@ -97,6 +98,12 @@ class JSONVisualizerApp:
         self.root.title("JSON Configuration Visualizer (OCS)")
         self.root.geometry("1000x700")
 
+        # Increase default font size for readability
+        default_font = tkfont.nametofont("TkDefaultFont")
+        text_font = tkfont.nametofont("TkTextFont")
+        default_font.configure(size=12)
+        text_font.configure(size=12)
+
         # List of dicts: {'name': filename, 'data': json_data}
         self.files: list[dict] = []
         self.current_tabs: dict[str, tuple[tk.Canvas, ttk.Frame]] = {}
@@ -184,6 +191,7 @@ class JSONVisualizerApp:
                 compare_data=self.files[1]["data"],
                 compare_name=self.files[1]["name"],
             )
+            self.display_heatmap()
 
     # ---------------------------
     # Display Helpers
@@ -386,6 +394,81 @@ class JSONVisualizerApp:
         except Exception:
             diff_text = "Error generating diff or jsondiff not installed."
         text.insert("1.0", diff_text)
+
+    # ---------------------------
+    # Heatmap View
+    # ---------------------------
+    def display_heatmap(self) -> None:
+        if len(self.files) <= 1:
+            return
+
+        heat_win = tk.Toplevel(self.root)
+        heat_win.title("Heatmap Comparison")
+        heat_win.geometry("800x600")
+
+        canvas = tk.Canvas(heat_win)
+        canvas.pack(fill="both", expand=True, side="left")
+        v_scroll = ttk.Scrollbar(heat_win, orient="vertical", command=canvas.yview)
+        v_scroll.pack(fill="y", side="right")
+        h_scroll = ttk.Scrollbar(heat_win, orient="horizontal", command=canvas.xview)
+        h_scroll.pack(fill="x", side="bottom")
+        canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
+        heat_frame = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=heat_frame, anchor="nw")
+        heat_frame.bind(
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        keys = sorted({k for f in self.files for k in f["data"].keys()})
+        base_data = self.files[0]["data"]
+
+        matrix: list[list[int]] = []
+        max_score = 0
+        for key in keys:
+            row = []
+            for f in self.files[1:]:
+                score = self.diff_count(base_data.get(key), f["data"].get(key))
+                row.append(score)
+                if score > max_score:
+                    max_score = score
+            matrix.append(row)
+
+        cell = 25
+        for col, f in enumerate(self.files[1:]):
+            ttk.Label(heat_frame, text=f["name"], font=(None, 9, "bold")).grid(
+                row=0, column=col + 1, padx=2, sticky="w"
+            )
+        for row_idx, key in enumerate(keys):
+            ttk.Label(heat_frame, text=key, font=(None, 9, "bold")).grid(
+                row=row_idx + 1, column=0, pady=2, sticky="e"
+            )
+            for col_idx, score in enumerate(matrix[row_idx]):
+                if max_score:
+                    intensity = int(min(score / max_score, 1) * 255)
+                else:
+                    intensity = 0
+                red = 255
+                green_blue = 255 - intensity
+                color = f"#{red:02x}{green_blue:02x}{green_blue:02x}"
+                frame = tk.Frame(
+                    heat_frame, background=color, width=cell, height=cell, borderwidth=1, relief="solid"
+                )
+                frame.grid(row=row_idx + 1, column=col_idx + 1)
+
+    def diff_count(self, a, b) -> int:
+        if a is None and b is None:
+            return 0
+        if isinstance(a, dict) and isinstance(b, dict):
+            keys = set(a.keys()) | set(b.keys())
+            return sum(self.diff_count(a.get(k), b.get(k)) for k in keys)
+        if isinstance(a, list) and isinstance(b, list):
+            length = max(len(a), len(b))
+            return sum(
+                self.diff_count(a[i] if i < len(a) else None, b[i] if i < len(b) else None)
+                for i in range(length)
+            )
+        return 0 if a == b else 1
 
 
 if __name__ == "__main__":  # pragma: no cover - GUI code
