@@ -32,7 +32,7 @@ class JSONVisualizerApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("JSON Configuration Visualizer (OCS)")
-        self.root.geometry("1000x700")
+        self.root.geometry("1100x700")
 
         # Increase default font size for readability
         default_font = tkfont.nametofont("TkDefaultFont")
@@ -45,6 +45,7 @@ class JSONVisualizerApp:
         self.current_tabs: dict[str, tuple[tk.Canvas, ttk.Frame]] = {}
         self.search_results: list[tuple[str, str]] = []
         self.all_entries: list[ttk.Entry] = []
+        self.tree_paths: dict[str, str] = {}
 
         # Lazy-load bookkeeping
         self.tab_json: dict[str, dict] = {}
@@ -53,7 +54,9 @@ class JSONVisualizerApp:
 
         style = ttk.Style(self.root)
         try:
-            if "vista" in style.theme_names():
+            if "clam" in style.theme_names():
+                style.theme_use("clam")
+            elif "vista" in style.theme_names():
                 style.theme_use("vista")
             elif "xpnative" in style.theme_names():
                 style.theme_use("xpnative")
@@ -76,7 +79,26 @@ class JSONVisualizerApp:
         self.upload_button = ttk.Button(root, text="Upload JSON File(s)", command=self.load_files)
         self.upload_button.pack(pady=10)
 
-        self.search_frame = ttk.Frame(root)
+        # Main paned window with navigation tree on the left
+        self.paned = ttk.PanedWindow(root, orient="horizontal", sashrelief="raised")
+        self.paned.pack(fill="both", expand=True)
+
+        # Treeview for navigation
+        self.tree_frame = ttk.Frame(self.paned)
+        self.tree = ttk.Treeview(self.tree_frame, show="tree")
+        self.tree.pack(fill="both", expand=True, side="left")
+        tree_scroll = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
+        tree_scroll.pack(side="right", fill="y")
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+
+        self.paned.add(self.tree_frame, weight=1)
+
+        # Right frame contains search and notebook
+        self.main_frame = ttk.Frame(self.paned)
+        self.paned.add(self.main_frame, weight=4)
+
+        self.search_frame = ttk.Frame(self.main_frame)
         self.search_frame.pack(fill="x", padx=10)
         ttk.Label(self.search_frame, text="Search:").pack(side="left", padx=(0, 5))
         self.search_var = tk.StringVar()
@@ -86,15 +108,15 @@ class JSONVisualizerApp:
         self.search_button = ttk.Button(self.search_frame, text="Go", command=self.perform_search)
         self.search_button.pack(side="left", padx=(5, 0))
 
-        self.results_listbox = tk.Listbox(root, height=5)
+        self.results_listbox = tk.Listbox(self.main_frame, height=5)
         self.results_listbox.pack(fill="x", padx=10)
         self.results_listbox.bind("<<ListboxSelect>>", self.on_result_select)
 
-        self.notebook = ttk.Notebook(root)
+        self.notebook = ttk.Notebook(self.main_frame)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
-        self.info_label = ttk.Label(root, text="Please upload one or more JSON files to begin.")
+        self.info_label = ttk.Label(self.main_frame, text="Please upload one or more JSON files to begin.")
         self.info_label.pack(pady=5)
 
     # ---------------------------
@@ -134,6 +156,8 @@ class JSONVisualizerApp:
         self.files.clear()
         self.current_tabs.clear()
         self.all_entries.clear()
+        self.tree.delete(*self.tree.get_children())
+        self.tree_paths.clear()
         for tab in self.notebook.tabs():
             self.notebook.forget(tab)
         self.results_listbox.delete(0, tk.END)
@@ -183,6 +207,8 @@ class JSONVisualizerApp:
         self.tab_json.clear()
         self.tab_frames.clear()
         self.tab_initialized.clear()
+        self.tree.delete(*self.tree.get_children())
+        self.tree_paths.clear()
 
         for key, value in data.items():
             frame = ttk.Frame(self.notebook)
@@ -190,6 +216,9 @@ class JSONVisualizerApp:
             ttk.Label(frame, text="Select tab to load...").pack()
             self.tab_json[key] = value
             self.tab_frames[key] = frame
+            root_id = self.tree.insert("", "end", text=key, open=False)
+            self.tree_paths[root_id] = key
+            self.build_tree_nodes(value, parent_item=root_id, path_prefix=key)
 
         def _init_first() -> None:
             event = tk.Event()
@@ -197,6 +226,21 @@ class JSONVisualizerApp:
             self.on_tab_changed(event)
 
         self.root.after_idle(_init_first)
+
+    def build_tree_nodes(self, data, parent_item: str, path_prefix: str) -> None:
+        """Recursively populate the navigation tree."""
+        if isinstance(data, dict):
+            for k, v in data.items():
+                node_path = f"{path_prefix}.{k}" if path_prefix else k
+                item = self.tree.insert(parent_item, "end", text=k, open=False)
+                self.tree_paths[item] = node_path
+                self.build_tree_nodes(v, item, node_path)
+        elif isinstance(data, list):
+            for idx, item_data in enumerate(data):
+                node_path = f"{path_prefix}[{idx}]"
+                item = self.tree.insert(parent_item, "end", text=f"[{idx}]", open=False)
+                self.tree_paths[item] = node_path
+                self.build_tree_nodes(item_data, item, node_path)
 
     def build_nested_frame(
         self,
@@ -333,6 +377,25 @@ class JSONVisualizerApp:
         tab_key, path = self.search_results[idx]
         tab_index = list(self.current_tabs.keys()).index(tab_key)
         self.notebook.select(tab_index)
+        canvas, scrollable = self.current_tabs[tab_key]
+        self.scroll_to_path(scrollable, path)
+
+    def on_tree_select(self, event: tk.Event) -> None:
+        if not self.tree.selection():
+            return
+        item = self.tree.selection()[0]
+        path = self.tree_paths.get(item)
+        if not path:
+            return
+        tab_key = path.split(".")[0].split("[")[0]
+        if tab_key not in self.current_tabs:
+            return
+        tab_index = list(self.current_tabs.keys()).index(tab_key)
+        self.notebook.select(tab_index)
+        if tab_key not in self.tab_initialized:
+            fake_event = tk.Event()
+            fake_event.widget = self.notebook
+            self.on_tab_changed(fake_event)
         canvas, scrollable = self.current_tabs[tab_key]
         self.scroll_to_path(scrollable, path)
 

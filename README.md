@@ -6,12 +6,14 @@ Features include:
 
 - Load one or more JSON files for inspection
 - View each configuration section in its own tab with optional tooltips
+- Tree-based navigation pane for quick access to any subsection
 - Tooltip text is stored in `tooltip.py` for easy customization
 - Search across all fields for quick navigation
 - Diff view between the first two files when `jsondiff` is installed
 - Heatmap comparison across all loaded files
 - Light and dark mode with automatic theme detection
 - Tabs load lazily for improved performance
+- Subtle shadows and raised panes for a modern look
 
 ## Requirements
 
